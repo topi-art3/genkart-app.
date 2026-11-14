@@ -23,7 +23,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 import io
 import json
-import requests
 from datetime import datetime
 from sqlalchemy import create_engine, Column, String, Integer, Text
 from sqlalchemy.orm import declarative_base, sessionmaker
@@ -40,8 +39,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ВАЖНО: Замени на свой НОВЫЙ токен!
-BOT_TOKEN = "ТВОЙ_НОВЫЙ_ТОКЕН_ЗДЕСЬ"
+# Берем токен из переменной окружения Render (Environment), 
+# если её нет, используем токен по умолчанию (тот, что ты скинула)
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8888816541:AAHr3KYdyGi3au_9xQQ83p7NVvI9A1Yp_xE")
 
 # --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
 def decline_fio(fio):
