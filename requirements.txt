@@ -1,6 +1,5 @@
 fastapi
 uvicorn
+pydantic
 requests
-python-multipart
-xhtml2pdf
-fpdf
+beautifulsoup4
