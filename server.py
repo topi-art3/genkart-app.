@@ -5,7 +5,7 @@ import requests
 from datetime import datetime
 from fastapi import FastAPI, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse, HTMLResponse
 from sqlalchemy import create_engine, Column, String, Integer, Text
 from sqlalchemy.orm import declarative_base, sessionmaker
 from xhtml2pdf import pisa
@@ -21,7 +21,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Токен (берется из настроек Render или используется этот)
+# Токен
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8888816541:AAHr3KYdyGi3au_9xQQ83p7NVvI9A1Yp_xE")
 
 # --- БАЗА ДАННЫХ ---
@@ -90,7 +90,72 @@ th, td { border: 1px solid #000; padding: 6px; text-align: left; }
 # --- ЭНДПОИНТЫ ---
 @app.get("/")
 def read_root(): 
-    return {"status": "ok"}
+    html_content = """
+    <!DOCTYPE html>
+    <html lang="ru">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        <title>GenDoc | Документы</title>
+        <script src="https://telegram.org/js/telegram-web-app.js"></script>
+        <style>
+            :root { --bg: #1a1a1a; --card: #2a2a2a; --text: #fff; --accent: #e83e8c; --border: #3f3f3f; }
+            body { background: var(--bg); color: var(--text); font-family: sans-serif; margin: 0; padding: 16px; }
+            .card { background: var(--card); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+            input { background: #111; border: 1px solid var(--border); color: var(--text); padding: 10px; border-radius: 8px; width: 100%; box-sizing: border-box; margin-bottom: 8px; }
+            .row { display: flex; gap: 8px; }
+            .btn { background: var(--accent); color: white; border: none; padding: 16px; border-radius: 12px; font-size: 18px; font-weight: bold; width: 100%; cursor: pointer; }
+            h3 { margin-top: 0; }
+        </style>
+    </head>
+    <body>
+        <h3>Создание документа</h3>
+        <div class="card">
+            <p>Данные услуги</p>
+            <input type="text" id="name" placeholder="Наименование (Транспортировка)" value="Транспортировка">
+            <div class="row">
+                <input type="text" id="unit" placeholder="Ед. (рейс)" value="рейс" style="width: 40%;">
+                <input type="number" id="qty" placeholder="Кол-во" value="1" style="width: 25%;">
+                <input type="number" id="price" placeholder="Цена" value="10000" style="width: 35%;">
+            </div>
+        </div>
+
+        <button class="btn" onclick="createDoc()">Создать PDF 📄</button>
+
+        <script>
+            const tg = window.Telegram.WebApp;
+            tg.expand();
+
+            async function createDoc() {
+                const data = new FormData();
+                data.append("template", "kp");
+                data.append("services_json", JSON.stringify([{
+                    name: document.getElementById('name').value,
+                    unit: document.getElementById('unit').value,
+                    qty: document.getElementById('qty').value,
+                    price: document.getElementById('price').value
+                }]));
+                data.append("chat_id", tg.initDataUnsafe?.user?.id || "");
+
+                tg.MainButton.showProgress();
+                try {
+                    const response = await fetch('/generate-doc', { method: 'POST', body: data });
+                    if (response.ok) {
+                        tg.showAlert("Документ отправлен в чат!");
+                    } else {
+                        tg.showAlert("Ошибка при создании");
+                    }
+                } catch (e) {
+                    tg.showAlert("Ошибка сети: " + e.message);
+                } finally {
+                    tg.MainButton.hideProgress();
+                }
+            }
+        </script>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
 
 @app.post("/generate-doc")
 async def generate_doc(
