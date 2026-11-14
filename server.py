@@ -170,3 +170,9 @@ async def generate_doc(
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=10000)
+import os
+
+if __name__ == "__main__":
+    # Render сам подставляет порт в переменную PORT
+    port = int(os.environ.get("PORT", 10000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
