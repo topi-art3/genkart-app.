@@ -21,7 +21,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Токен
+# Токен (берется из настроек Render или используется этот)
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8888816541:AAHr3KYdyGi3au_9xQQ83p7NVvI9A1Yp_xE")
 
 # --- БАЗА ДАННЫХ ---
@@ -51,7 +51,7 @@ class Profile(Base):
 
 Base.metadata.create_all(bind=engine)
 
-# --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
+# --- ФУНКЦИИ ---
 def format_money(val):
     return f"{val:,.2f}".replace(',', ' ').replace('.', ',')
 
@@ -87,7 +87,7 @@ th, td { border: 1px solid #000; padding: 6px; text-align: left; }
 .signature-block { margin-top: 30px; }
 """
 
-# --- ЭНДПОИНТЫ API ---
+# --- ЭНДПОИНТЫ ---
 @app.get("/")
 def read_root(): 
     return {"status": "ok"}
@@ -121,7 +121,6 @@ async def generate_doc(
         header = get_header_html(company, inn, kpp, address, contacts, logo)
         html_content = ""
 
-        # --- ЛОГИКА ШАБЛОНОВ ---
         if template == "kp":
             html_content = f"""
             <html><head><style>{CSS_STYLES}</style></head><body>
