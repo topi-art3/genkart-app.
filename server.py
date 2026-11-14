@@ -10,7 +10,6 @@ from sqlalchemy import create_engine, Column, String, Integer, Text
 from sqlalchemy.orm import declarative_base, sessionmaker
 from xhtml2pdf import pisa
 from num2words import num2words
-from fpdf import FPDF # Мы оставили это, но pip установит fpdf2
 
 app = FastAPI()
 
@@ -22,7 +21,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Токен подтягивается из настроек Render (Environment), если нет — берет этот
+# Токен
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8888816541:AAHr3KYdyGi3au_9xQQ83p7NVvI9A1Yp_xE")
 
 # --- БАЗА ДАННЫХ ---
@@ -171,7 +170,7 @@ async def generate_doc(
             </div>
             </body></html>
             """
-        else: # Заглушка для остальных, чтобы не падало
+        else:
             html_content = f"<html><body><h1>{template.upper()}</h1><p>Документ на сумму {total_price} руб.</p></body></html>"
 
         pdf_buffer = io.BytesIO()
