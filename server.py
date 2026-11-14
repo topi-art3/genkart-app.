@@ -1,5 +1,26 @@
+import subprocess
+import sys
+import os
+
+# --- АВАРИЙНАЯ УСТАНОВКА БИБЛИОТЕК ---
+# Этот блок заставит Render установить всё необходимое, даже если он проигнорирует requirements.txt
+try:
+    import fastapi
+    import uvicorn
+    import fpdf
+    import sqlalchemy
+    import num2words
+    import xhtml2pdf
+    import requests
+except ImportError:
+    print("Установка недостающих библиотек...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "fastapi", "uvicorn", "fpdf2", "python-multipart", "sqlalchemy", "num2words", "xhtml2pdf", "requests"])
+    print("Библиотеки установлены!")
+
+# --- ОСНОВНОЙ КОД ---
 from fastapi import FastAPI, Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, StreamingResponse
 import io
 import json
 import requests
@@ -19,9 +40,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ВАЖНО: Токен, который ты прислала, выглядит как настоящий. 
-# В целях безопасности, если этот код попадет в открытый доступ, перевыпусти токен в @BotFather.
-BOT_TOKEN = "9195903180:AAGSvvim9LlwkYhCCNRoFk_e09OQ_Fyh_58" 
+# ВАЖНО: Замени на свой НОВЫЙ токен!
+BOT_TOKEN = "ТВОЙ_НОВЫЙ_ТОКЕН_ЗДЕСЬ"
 
 # --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
 def decline_fio(fio):
@@ -41,26 +61,13 @@ def get_signature_fio(fio):
     if len(parts) >= 2: return f"{parts[1]} {parts[0]}"
     return fio
 
-def format_money(val):
-    return f"{val:,.2f}".replace(',', ' ').replace('.', ',')
-
-def num2words_rub(num):
-    try:
-        rub = int(num)
-        kop = int(round((num - rub) * 100))
-        rub_str = num2words(rub, lang='ru').capitalize()
-        return f"{rub_str} рублей {kop:02d} копеек"
-    except:
-        return f"{format_money(num)} рублей"
-
-# --- БАЗА ДАННЫХ ---
 DATABASE_URL = "sqlite:///./profiles_final.db"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 class Profile(Base):
-    __tablename__ = "profiles" # Исправлено с tablename на __tablename__
+    __tablename__ = "profiles"
     id = Column(Integer, primary_key=True, index=True)
     chat_id = Column(String, unique=True, index=True)
     company = Column(String, default="ООО Ваша компания")
@@ -80,7 +87,6 @@ class Profile(Base):
 
 Base.metadata.create_all(bind=engine)
 
-# --- СТИЛИ PDF ---
 CSS_STYLES = """
 @page { size: a4; margin: 20mm 15mm 20mm 30mm; }
 @font-face { font-family: "PTSans"; src: url("https://github.com/google/fonts/raw/main/ofl/ptsans/PT_Sans-Web-Regular.ttf"); }
@@ -95,6 +101,18 @@ th, td { border: 1px solid #000; padding: 6px; text-align: left; }
 .signature-block { margin-top: 30px; text-indent: 0; }
 .list-item { text-indent: 0; margin-bottom: 5px; }
 """
+
+def format_money(val):
+    return f"{val:,.2f}".replace(',', ' ').replace('.', ',')
+
+def num2words_rub(num):
+    try:
+        rub = int(num)
+        kop = int(round((num - rub) * 100))
+        rub_str = num2words(rub, lang='ru').capitalize()
+        return f"{rub_str} рублей {kop:02d} копеек"
+    except:
+        return f"{format_money(num)} рублей"
 
 def get_header_html(company, inn, kpp, address, contacts, logo_base64=None):
     logo_html = f'<img src="{logo_base64}" style="max-height: 50px; margin-bottom: 10px;"><br>' if logo_base64 else ''
@@ -166,7 +184,6 @@ async def generate_doc(
         if tax_mode == "osno":
             nds_text = "В том числе НДС 22%"
 
-        # Формирование строк таблицы
         rows_html = ""
         for i, s in enumerate(services, 1):
             sum_s = float(s['price']) * int(s['qty'])
@@ -176,7 +193,6 @@ async def generate_doc(
         
         html_content = ""
 
-        # --- ЛОГИКА ДЛЯ РАЗНЫХ ТИПОВ ДОКУМЕНТОВ ---
         if template == "kp":
             html_content = f"""
             <html><head><style>{CSS_STYLES}</style></head><body>
@@ -326,12 +342,10 @@ async def generate_doc(
             </body></html>
             """
 
-        # Конвертация HTML в PDF
         pdf_buffer = io.BytesIO()
         pisa.CreatePDF(io.StringIO(html_content), dest=pdf_buffer)
         pdf_buffer.seek(0)
 
-        # ОТПРАВКА В TELEGRAM (Если передан chat_id)
         if chat_id:
             file_name = f"{template}_{current_date.replace('.', '_')}.pdf"
             url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendDocument"
@@ -344,8 +358,6 @@ async def generate_doc(
                 
             return {"status": "ok", "message": "Отправлено в Telegram"}
 
-        # Если chat_id нет (тестирование в браузере), возвращаем файл напрямую
-        from fastapi.responses import StreamingResponse
         return StreamingResponse(pdf_buffer, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=document.pdf"})
 
     except Exception as e:
