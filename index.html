@@ -3,266 +3,73 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI Ответы на отзывы</title>
+    <title>GenDoc</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        :root {
-            --bg-color: #1c1c1e;
-            --card-bg: #2c2c2e;
-            --input-bg: #1c1c1e;
-            --accent-color: #ff3366;
-            --text-main: #ffffff;
-            --text-muted: #8e8e93;
-            --border-radius: 16px;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-main);
-            padding: 15px;
-            margin: 0;
-            box-sizing: border-box;
-        }
-
-        .header {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 20px;
-            font-weight: 600;
-            margin-bottom: 20px;
-            padding-left: 5px;
-        }
-
-        .card {
-            background-color: var(--card-bg);
-            border-radius: var(--border-radius);
-            padding: 20px;
-            margin-bottom: 15px;
-            border: 1px solid #3a3a3c;
-        }
-
-        .card-header {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 15px;
-        }
-
-        .step-number {
-            background-color: #3a3a3c;
-            color: var(--text-muted);
-            width: 28px;
-            height: 28px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 14px;
-            font-weight: bold;
-        }
-
-        input, textarea {
-            width: 100%;
-            background-color: var(--input-bg);
-            border: 1px solid #3a3a3c;
-            color: var(--text-main);
-            padding: 15px;
-            border-radius: 12px;
-            font-size: 16px;
-            box-sizing: border-box;
-            margin-bottom: 15px;
-            outline: none;
-            transition: border 0.2s;
-        }
-
-        input:focus, textarea:focus {
-            border-color: var(--accent-color);
-        }
-
-        textarea {
-            resize: none;
-            height: 100px;
-        }
-
-        .btn-primary {
-            width: 100%;
-            background-color: var(--accent-color);
-            color: white;
-            border: none;
-            padding: 18px;
-            border-radius: 14px;
-            font-size: 17px;
-            font-weight: 600;
-            cursor: pointer;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 8px;
-            transition: opacity 0.2s;
-        }
-
-        .btn-primary:active { opacity: 0.8; }
-        .btn-primary:disabled { opacity: 0.5; }
-
-        .btn-secondary {
-            width: 100%;
-            background-color: #3a3a3c;
-            color: white;
-            border: none;
-            padding: 15px;
-            border-radius: 12px;
-            font-size: 16px;
-            font-weight: 500;
-            cursor: pointer;
-            margin-bottom: 15px;
-        }
-
-        #result-container {
-            display: none;
-            margin-top: 15px;
-        }
-
-        .result-item {
-            background-color: var(--input-bg);
-            border: 1px solid #3a3a3c;
-            padding: 15px;
-            border-radius: 12px;
-            margin-bottom: 10px;
-            font-size: 15px;
-            line-height: 1.4;
-        }
-
-        .footer-warning {
-            text-align: center;
-            color: var(--text-muted);
-            font-size: 12px;
-            margin-top: 20px;
-            padding: 0 10px;
-        }
+        :root { --bg-color: #1a1a1a; --card-bg: #2a2a2a; --text: #ffffff; --accent: #e83e8c; --border: #3f3f3f; }
+        body { background-color: var(--bg-color); color: var(--text); font-family: sans-serif; margin: 0; padding: 16px; }
+        .card { background-color: var(--card-bg); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+        input { background-color: #111; border: 1px solid var(--border); color: var(--text); padding: 10px; border-radius: 8px; width: 100%; box-sizing: border-box; margin-bottom: 8px;}
+        .row { display: flex; gap: 8px; }
+        .btn-submit { background-color: var(--accent); color: white; border: none; padding: 16px; border-radius: 12px; font-size: 18px; font-weight: bold; width: 100%; cursor: pointer; }
     </style>
 </head>
 <body>
-
-    <div class="header">
-        ✨ GenReply | Отзывы
-    </div>
-
+    <h3>Создание документа</h3>
+    
     <div class="card">
-        <div class="card-header">
-            <div class="step-number">1</div>
-            Данные товара
-        </div>
-        <input type="text" id="productUrl" placeholder="Ссылка на товар WB / Ozon">
-        <button class="btn-secondary" onclick="scanReviews()" id="scanBtn">
-            📥 Сканировать отзывы
-        </button>
-    </div>
-
-    <div class="card">
-        <div class="card-header">
-            <div class="step-number">2</div>
-            Текст отзыва
-        </div>
-        <textarea id="reviewText" placeholder="Вставьте сюда отзыв клиента (или нажмите сканировать выше)..."></textarea>
-        <button class="btn-primary" onclick="generateReply()" id="genBtn">
-            Создать ответы 🤖
-        </button>
-    </div>
-
-    <div id="result-container">
-        <div class="card">
-            <div class="card-header">
-                <div class="step-number">3</div>
-                Варианты ответов
-            </div>
-            <div id="resultsList"></div>
+        <p>Услуга 1</p>
+        <input type="text" id="name" placeholder="Наименование (Транспортировка)" value="Транспортировка">
+        <div class="row">
+            <input type="text" id="unit" placeholder="Ед. (рейс)" value="рейс" style="width: 40%;">
+            <input type="number" id="qty" placeholder="Кол-во" value="1" style="width: 25%;">
+            <input type="number" id="price" placeholder="Цена" value="10000" style="width: 35%;">
         </div>
     </div>
 
-    <div class="footer-warning">
-        ⚠️ Внимание! ИИ может допускать ошибки. Обязательно проверяйте итоговый текст перед отправкой.
-    </div>
+    <button class="btn-submit" onclick="createDoc()">Создать PDF 📄</button>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
-        tg.ready();
-        
-        tg.setHeaderColor('#1c1c1e');
-        tg.setBackgroundColor('#1c1c1e');
 
-        // ТВОЯ ССЫЛКА НА RENDER
-        const API_URL = 'https://genkart-app.onrender.com';
+        async function createDoc() {
+            // Собираем данные
+            const data = {
+                type: 'КП',
+                items: [{
+                    name: document.getElementById('name').value,
+                    unit: document.getElementById('unit').value,
+                    qty: document.getElementById('qty').value,
+                    price: document.getElementById('price').value
+                }]
+            };
 
-        async function scanReviews() {
-            const url = document.getElementById('productUrl').value.trim();
-            const btn = document.getElementById('scanBtn');
-            
-            if (!url) return tg.showAlert("Вставьте ссылку на товар!");
-
-            btn.innerText = "Сканирую... ⏳";
-            btn.disabled = true;
+            tg.MainButton.showProgress(); // Показываем загрузку в ТГ
 
             try {
-                const response = await fetch(`${API_URL}/scan_reviews`, {
+                const response = await fetch('/generate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url: url })
+                    body: JSON.stringify(data)
                 });
-                const data = await response.json();
-                
-                if (data.status === 'ok') {
-                    document.getElementById('reviewText').value = data.reviews[0]; 
-                    tg.showAlert("Отзыв найден! Нажмите 'Создать ответы'.");
+
+                if (response.ok) {
+                    // Получаем файл в виде блоба и скачиваем
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = "document.pdf";
+                    a.click();
+                    tg.showAlert("Документ успешно создан!");
                 } else {
-                    tg.showAlert("Ошибка: " + data.message);
-                }
-            } catch (e) {
-                tg.showAlert("Ошибка сети. Сервер спит (это нормально для бесплатного тарифа Render). Подождите 30 секунд и попробуйте снова.");
-            } finally {
-                btn.innerText = "📥 Сканировать отзывы";
-                btn.disabled = false;
-            }
-        }
-
-        async function generateReply() {
-            const text = document.getElementById('reviewText').value.trim();
-            const btn = document.getElementById('genBtn');
-            const resultContainer = document.getElementById('result-container');
-            const resultsList = document.getElementById('resultsList');
-            
-            if (!text) return tg.showAlert("Вставьте текст отзыва!");
-
-            btn.innerText = "Генерирую... ⏳";
-            btn.disabled = true;
-            resultContainer.style.display = 'block';
-            resultsList.innerHTML = '<div style="color: #8e8e93; text-align: center;">Нейросеть думает...</div>';
-
-            try {
-                const response = await fetch(`${API_URL}/generate_reply`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ review_text: text })
-                });
-                const data = await response.json();
-                
-                if (data.status === 'ok') {
-                    const answers = data.reply.split('\n\n').filter(a => a.trim() !== '');
-                    resultsList.innerHTML = answers.map(ans => 
-                        `<div class="result-item">${ans}</div>`
-                    ).join('');
-                } else {
-                    resultsList.innerHTML = `<div class="result-item" style="color: red;">Ошибка: ${data.message}</div>`;
+                    tg.showAlert("Ошибка сервера");
                 }
             } catch (error) {
-                resultsList.innerHTML = `<div class="result-item" style="color: red;">Ошибка сети. Сервер недоступен.</div>`;
+                tg.showAlert("Ошибка: " + error.message);
             } finally {
-                btn.innerText = "Создать ответы 🤖";
-                btn.disabled = false;
+                tg.MainButton.hideProgress();
             }
         }
     </script>
