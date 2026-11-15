@@ -1,28 +1,19 @@
-
-import io
-import json
-import os
-import requests
-from datetime import datetime
 from fastapi import FastAPI, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse, HTMLResponse
+from fastapi.responses import JSONResponse, HTMLResponse
+import io
+import json
+import requests
+from datetime import datetime
 from sqlalchemy import create_engine, Column, String, Integer, Text
 from sqlalchemy.orm import declarative_base, sessionmaker
 from xhtml2pdf import pisa
-from num2words import num2words
 
 app = FastAPI()
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8888816541:AAHr3KYdyGi3au_9xQQ83p7NVvI9A1Yp_xE")
+# --- ТОКЕН НОВОГО БОТА ---
+BOT_TOKEN = "9065574882:AAEiC0Ls-YC1ADejERPNLcZSdEJS7qCZe_I" 
 
 DATABASE_URL = "sqlite:///./profiles_final.db"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
@@ -46,21 +37,25 @@ class Profile(Base):
     bik = Column(String, default="")
     rs = Column(String, default="")
     ks = Column(String, default="")
-    logo = Column(Text, nullable=True)
+    logo = Column(String, nullable=True)
 
 Base.metadata.create_all(bind=engine)
 
+CSS_STYLES = """
+@page { size: a4; margin: 20mm 15mm 20mm 30mm; }
+body { font-family: "Helvetica", sans-serif; font-size: 11pt; line-height: 1.35; text-align: justify; color: #000; }
+h1.title { text-align: center; font-size: 14pt; font-weight: bold; margin-bottom: 20px; text-transform: uppercase; }
+.meta { width: 100%; margin-bottom: 20px; }
+.meta td { border: none; padding: 0; }
+.section-title { font-weight: bold; margin-top: 15px; margin-bottom: 10px; }
+table { width: 100%; margin-top: 15px; }
+th, td { border: 1px solid #000; padding: 6px; text-align: left; }
+.header-info { margin-bottom: 20px; font-size: 10pt; text-align: left; }
+.signature-block { margin-top: 30px; }
+"""
+
 def format_money(val):
     return f"{val:,.2f}".replace(',', ' ').replace('.', ',')
-
-def num2words_rub(num):
-    try:
-        rub = int(num)
-        kop = int(round((num - rub) * 100))
-        rub_str = num2words(rub, lang='ru').capitalize()
-        return f"{rub_str} рублей {kop:02d} копеек"
-    except:
-        return f"{format_money(num)} рублей"
 
 def get_header_html(company, inn, kpp, address, contacts, logo_base64=None):
     logo_html = f'<img src="{logo_base64}" style="max-height: 50px; margin-bottom: 10px;"><br>' if logo_base64 else ''
@@ -72,48 +67,56 @@ def get_header_html(company, inn, kpp, address, contacts, logo_base64=None):
     </div>
     """
 
-CSS_STYLES = """
-@page { size: a4; margin: 20mm 15mm 20mm 30mm; }
-body { font-family: "Helvetica", sans-serif; font-size: 11pt; line-height: 1.35; text-align: justify; color: #000; }
-h1.title { text-align: center; font-size: 14pt; font-weight: bold; margin-bottom: 20px; text-transform: uppercase; }
-.meta { width: 100%; margin-bottom: 20px; }
-.meta td { border: none; padding: 0; }
-.section-title { font-weight: bold; margin-top: 15px; margin-bottom: 10px; }
-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-th, td { border: 1px solid #000; padding: 6px; text-align: left; }
-.header-info { margin-bottom: 20px; font-size: 10pt; text-align: left; }
-.signature-block { margin-top: 30px; }
-"""
-
+# --- ИНТЕРФЕЙС (HTML) ---
 @app.get("/")
 def read_root(): 
-    html_content = """
+    html = """
     <!DOCTYPE html>
     <html lang="ru">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-        <title>GenDoc | Документы</title>
+        <title>GenDoc</title>
         <script src="https://telegram.org/js/telegram-web-app.js"></script>
         <style>
-            :root { --bg: #1a1a1a; --card: #2a2a2a; --text: #fff; --accent: #e83e8c; --border: #3f3f3f; }
-            body { background: var(--bg); color: var(--text); font-family: sans-serif; margin: 0; padding: 16px; }
-            .card { background: var(--card); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
-            input { background: #111; border: 1px solid var(--border); color: var(--text); padding: 10px; border-radius: 8px; width: 100%; box-sizing: border-box; margin-bottom: 8px; }
+            body { background: #1a1a1a; color: #fff; font-family: sans-serif; padding: 16px; margin: 0; }
+            .card { background: #2a2a2a; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+            input, select { background: #111; border: 1px solid #3f3f3f; color: #fff; padding: 10px; border-radius: 8px; width: 100%; box-sizing: border-box; margin-bottom: 8px; }
             .row { display: flex; gap: 8px; }
-            .btn { background: var(--accent); color: white; border: none; padding: 16px; border-radius: 12px; font-size: 18px; font-weight: bold; width: 100%; cursor: pointer; }
-            h3 { margin-top: 0; }
+            .btn { background: #e83e8c; color: white; border: none; padding: 16px; border-radius: 12px; font-size: 16px; font-weight: bold; width: 100%; cursor: pointer; }
         </style>
     </head>
     <body>
         <h3>Создание документа</h3>
+        
         <div class="card">
-            <p>Данные услуги</p>
-            <input type="text" id="name" placeholder="Наименование (Транспортировка)" value="Транспортировка">
+            <select id="template">
+                <option value="kp">Коммерческое предложение (КП)</option>
+                <option value="smeta">Смета</option>
+                <option value="dogovor">Договор</option>
+                <option value="act">Акт</option>
+                <option value="invoice">Счет</option>
+            </select>
+            
+            <input type="text" id="company" placeholder="Ваша компания" value="ООО Ваша компания">
+            <input type="text" id="inn" placeholder="ИНН" value="0000000000">
+            <input type="text" id="address" placeholder="Адрес" value="г. Москва">
+            <input type="text" id="director" placeholder="ФИО Директора" value="Иванов И.И.">
+            
+            <hr style="border-color: #3f3f3f; margin: 15px 0;">
+            
+            <input type="text" id="customer_name" placeholder="Заказчик (Компания)" value="ООО Заказчик">
+            <input type="text" id="customer_inn" placeholder="ИНН Заказчика" value="1111111111">
+            <input type="text" id="customer_director" placeholder="ФИО Директора Заказчика" value="Петров П.П.">
+            
+            <hr style="border-color: #3f3f3f; margin: 15px 0;">
+            
+            <p style="margin-top:0;">Услуга:</p>
+            <input type="text" id="service_name" placeholder="Название услуги" value="Транспортировка">
             <div class="row">
-                <input type="text" id="unit" placeholder="Ед. (рейс)" value="рейс" style="width: 40%;">
-                <input type="number" id="qty" placeholder="Кол-во" value="1" style="width: 25%;">
-                <input type="number" id="price" placeholder="Цена" value="10000" style="width: 35%;">
+                <input type="text" id="unit" placeholder="Ед." value="рейс" style="width: 30%;">
+                <input type="number" id="qty" placeholder="Кол-во" value="1" style="width: 30%;">
+                <input type="number" id="price" placeholder="Цена" value="10000" style="width: 40%;">
             </div>
         </div>
 
@@ -125,13 +128,23 @@ def read_root():
 
             async function createDoc() {
                 const data = new FormData();
-                data.append("template", "kp");
+                data.append("template", document.getElementById('template').value);
+                data.append("company", document.getElementById('company').value);
+                data.append("inn", document.getElementById('inn').value);
+                data.append("address", document.getElementById('address').value);
+                data.append("director", document.getElementById('director').value);
+                
+                data.append("customer_name", document.getElementById('customer_name').value);
+                data.append("customer_inn", document.getElementById('customer_inn').value);
+                data.append("customer_director", document.getElementById('customer_director').value);
+                
                 data.append("services_json", JSON.stringify([{
-                    name: document.getElementById('name').value,
+                    name: document.getElementById('service_name').value,
                     unit: document.getElementById('unit').value,
                     qty: document.getElementById('qty').value,
                     price: document.getElementById('price').value
                 }]));
+                
                 data.append("chat_id", tg.initDataUnsafe?.user?.id || "");
 
                 tg.MainButton.showProgress();
@@ -143,7 +156,7 @@ def read_root():
                         tg.showAlert("Ошибка при создании");
                     }
                 } catch (e) {
-                    tg.showAlert("Ошибка сети: " + e.message);
+                    tg.showAlert("Ошибка сети");
                 } finally {
                     tg.MainButton.hideProgress();
                 }
@@ -152,17 +165,18 @@ def read_root():
     </body>
     </html>
     """
-    return HTMLResponse(content=html_content)
+    return HTMLResponse(content=html)
 
+# --- ГЕНЕРАЦИЯ ДОКУМЕНТОВ (Твой код) ---
 @app.post("/generate-doc")
 async def generate_doc(
     template: str = Form("kp"), company: str = Form("ООО Ваша компания"), inn: str = Form("0000000000"), kpp: str = Form(""), 
     address: str = Form("г. Москва"), contacts: str = Form("+7 (999) 999-99-99"), tax_mode: str = Form("usn"),
     director: str = Form("Иванов И.И."), director_pos: str = Form("Генерального директора"), director_pos_nom: str = Form("Генеральный директор"),
     services_json: str = Form("[]"), term: str = Form("30"), dogovor_number: str = Form("Б/Н"), dogovor_date: str = Form(""), 
-    customer_name: str = Form("ООО Заказчик"), customer_inn: str = Form("1111111111"), customer_address: str = Form("г. Москва"), 
-    customer_director: str = Form("Петров П.П."), customer_pos_nom: str = Form("Генеральный директор"),
-    chat_id: str = Form(None), logo: str = Form(None),
+    customer_name: str = Form("ООО Заказчик"), customer_inn: str = Form("1111111111"), customer_kpp: str = Form(""), customer_address: str = Form("г. Москва"), 
+    customer_director: str = Form("Петров П.П."), customer_pos: str = Form("Генерального директора"), customer_pos_nom: str = Form("Генеральный директор"),
+    smeta_date: str = Form(""), smeta_appendix: str = Form("1"), chat_id: str = Form(None), logo: str = Form(None),
     bank_name: str = Form(None), bik: str = Form(None), rs: str = Form(None), ks: str = Form(None)
 ):
     try:
@@ -170,88 +184,146 @@ async def generate_doc(
         total_price = sum(float(s['price']) * int(s['qty']) for s in services)
         current_date = datetime.now().strftime("%d.%m.%Y")
         date_to_use = dogovor_date if dogovor_date else current_date
+        smeta_date_to_use = smeta_date if smeta_date else current_date
+        buffer = io.BytesIO()
         
-        nds_text = "НДС не облагается на основании п. 2 ст. 346.11 НК РФ (УСН)"
         if tax_mode == "osno":
             nds_text = "В том числе НДС 22%"
+        else:
+            nds_text = "НДС не облагается на основании п. 2 ст. 346.11 НК РФ (УСН)"
+            
+        header_html = get_header_html(company, inn, kpp, address, contacts, logo)
 
-        rows_html = ""
-        for i, s in enumerate(services, 1):
-            sum_s = float(s['price']) * int(s['qty'])
-            rows_html += f"<tr><td align='center'>{i}</td><td>{s['name']}</td><td align='center'>{s.get('unit', 'шт')}</td><td align='center'>{s['qty']}</td><td align='right'>{format_money(float(s['price']))}</td><td align='right'>{format_money(sum_s)}</td></tr>"
-
-        header = get_header_html(company, inn, kpp, address, contacts, logo)
-        html_content = ""
-
+        # --- КП ---
         if template == "kp":
-            html_content = f"""
-            <html><head><style>{CSS_STYLES}</style></head><body>
-            {header}
-            <div style="text-align: right; margin-bottom: 10px;">Исх. № {dogovor_number} от {date_to_use} г.</div>
+            rows = "".join([f"<tr><td style='text-align:center;'>{i+1}</td><td>{s['name']}</td><td style='text-align:center;'>{term}</td><td style='text-align:right;'>{format_money(float(s['price'])*int(s['qty']))} руб.</td></tr>" for i, s in enumerate(services)])
+            html = f"""<html><head><meta charset="utf-8"><style>{CSS_STYLES}</style></head><body>
+            {header_html}
+            <table class="meta"><tr><td style="text-align:right;">Исх. № {dogovor_number} от {date_to_use} г.</td></tr></table>
             <h1 class="title">Коммерческое предложение<br>на оказание услуг</h1>
             <p>Уважаемый клиент! {company} предлагает вам следующие услуги:</p>
-            <table>
-                <tr><th>№</th><th>Наименование услуги</th><th>Ед.</th><th>Срок</th><th>Стоимость</th></tr>
-                {''.join([f"<tr><td align='center'>{i}</td><td>{s['name']}</td><td align='center'>{s.get('unit', 'усл.')}</td><td align='center'>{term} дн.</td><td align='right'>{format_money(float(s['price']) * int(s['qty']))} руб.</td></tr>" for i, s in enumerate(services, 1)])}
-                <tr><td colspan="4" align="right"><b>Итого:</b></td><td align="right"><b>{format_money(total_price)} руб.</b></td></tr>
-            </table>
-            <p>({nds_text})</p>
-            <div class="signature-block">
-                <p>С уважением,<br>{director_pos_nom}<br>{company}</p>
-                <br><br>
-                <table style="width: 100%; border: none;"><tr>
-                    <td style="border: none; width: 50%;">__________________ / {director} /</td>
-                </tr></table>
-            </div>
-            </body></html>
-            """
-        elif template == "schet":
-            bank_info = f"<p><b>Банк:</b> {bank_name}<br><b>БИК:</b> {bik}<br><b>Р/с:</b> {rs}<br><b>К/с:</b> {ks}</p>" if bank_name else ""
-            html_content = f"""
-            <html><head><style>{CSS_STYLES}</style></head><body>
-            {header}
-            <h1 class="title">Счет на оплату № {dogovor_number} от {date_to_use} г.</h1>
-            <p><b>Поставщик:</b> {company}, ИНН {inn}, {address}<br><b>Покупатель:</b> {customer_name}, ИНН {customer_inn}, {customer_address}</p>
-            <table>
-                <tr><th>№</th><th>Наименование</th><th>Ед.</th><th>Кол-во</th><th>Цена</th><th>Сумма</th></tr>
-                {rows_html}
-                <tr><td colspan="5" align="right"><b>Итого:</b></td><td align="right"><b>{format_money(total_price)}</b></td></tr>
-                <tr><td colspan="5" align="right">{nds_text}</td><td align="right">0,00</td></tr>
-                <tr><td colspan="5" align="right"><b>Всего к оплате:</b></td><td align="right"><b>{format_money(total_price)}</b></td></tr>
-            </table>
-            <p>Сумма прописью: {num2words_rub(total_price)}.</p>
-            {bank_info}
-            <div class="signature-block">
-                <table style="width: 100%; border: none;">
-                    <tr>
-                        <td style="border: none; width: 50%;">Руководитель:<br><br>__________________ / {director} /</td>
-                        <td style="border: none; width: 50%;">Главный бухгалтер:<br><br>__________________ / {director} /</td>
-                    </tr>
-                </table>
-            </div>
-            </body></html>
-            """
-        else:
-            html_content = f"<html><body><h1>{template.upper()}</h1><p>Документ на сумму {total_price} руб.</p></body></html>"
+            <table><tr><th style="text-align:center; width: 5%;">№</th><th style="width: 50%;">Наименование услуги</th><th style="text-align:center; width: 15%;">Срок</th><th style="text-align:right; width: 20%;">Стоимость</th></tr>{rows}</table>
+            <p style="text-align:right; margin-top: 10px; text-indent: 0;"><strong>Итого: {format_money(total_price)} руб.</strong><br>({nds_text})</p>
+            <div class="signature-block"><strong>С уважением,</strong><br><br>{director_pos_nom}<br>{company}<br><br><br>_______________ / {director} /<br>М.П.</div>
+            </body></html>"""
+            pisa.CreatePDF(html, dest=buffer)
 
-        pdf_buffer = io.BytesIO()
-        pisa.CreatePDF(io.StringIO(html_content), dest=pdf_buffer)
-        pdf_buffer.seek(0)
+        # --- СМЕТА ---
+        elif template == "smeta":
+            rows = "".join([f"<tr><td style='text-align:center;'>{i+1}</td><td>{s['name']}</td><td style='text-align:center;'>{s.get('unit', 'усл.')}</td><td style='text-align:center;'>{s['qty']}</td><td style='text-align:right;'>{format_money(float(s['price']))}</td><td style='text-align:right;'>{format_money(float(s['price'])*int(s['qty']))}</td></tr>" for i, s in enumerate(services)])
+            html = f"""<html><head><meta charset="utf-8"><style>{CSS_STYLES}</style></head><body>
+            <table class="meta"><tr><td style="text-align:right;">Приложение № {smeta_appendix} к Договору № {dogovor_number} от {smeta_date_to_use}</td></tr></table>
+            <h1 class="title">Смета № {smeta_appendix}</h1>
+            <table><tr><th style="text-align:center; width: 5%;">№</th><th style="width: 40%;">Наименование</th><th style="text-align:center; width: 10%;">Ед.</th><th style="text-align:center; width: 10%;">Кол-во</th><th style="text-align:right; width: 15%;">Цена</th><th style="text-align:right; width: 15%;">Сумма</th></tr>{rows}<tr><td colspan="5" style="text-align:right;font-weight:bold;">Всего:</td><td style="text-align:right;font-weight:bold;">{format_money(total_price)}</td></tr></table>
+            <p><strong>Всего наименований {len(services)}, на сумму {format_money(total_price)} руб.</strong> {nds_text}.</p>
+            <table style="width: 100%; border: none; margin-top: 30px; text-indent: 0;"><tr><td style="border: none; width: 50%;"><strong>Исполнитель:</strong><br>{company}<br><br><br>{director_pos_nom}<br>_______________ / {director} /<br>М.П.</td><td style="border: none; width: 50%;"><strong>Заказчик:</strong><br>{customer_name}<br><br><br>{customer_pos_nom}<br>_______________ / {customer_director} /<br>М.П.</td></tr></table>
+            </body></html>"""
+            pisa.CreatePDF(html, dest=buffer)
+
+        # --- ДОГОВОР ---
+        elif template == "dogovor":
+            first_service = services[0]['name'] if services else "Услуги"
+            kpp_str = f", КПП: {kpp}" if kpp else ""
+            cust_kpp_str = f", КПП: {customer_kpp}" if customer_kpp else ""
+            html = f"""<html><head><meta charset="utf-8"><style>{CSS_STYLES}</style></head><body>
+            <h1 class="title">ДОГОВОР ОКАЗАНИЯ УСЛУГ № {dogovor_number}</h1>
+            <table class="meta"><tr><td style="text-align: left;">г. Москва</td><td style="text-align: right;">{date_to_use} г.</td></tr></table>
+            <p>{company}, в лице {director_pos} {director}, с одной стороны, и {customer_name} (ИНН: {customer_inn}{cust_kpp_str}, адрес: {customer_address}), в лице {customer_pos} {customer_director}, с другой стороны, заключили Договор:</p>
+            <div class="section-title">1. ПРЕДМЕТ ДОГОВОРА</div>
+            <p>1.1. Исполнитель обязуется оказать следующие услуги: <strong>{first_service}</strong> (далее — «Услуги»).</p>
+            <p>1.2. Перечень и стоимость Услуг определяются в Смете (Приложение № {smeta_appendix}).</p>
+            <div class="section-title">2. СТОИМОСТЬ И ПОРЯДОК РАСЧЕТОВ</div>
+            <p>2.1. Общая стоимость Услуг составляет <strong>{format_money(total_price)} руб.</strong>, {nds_text}.</p>
+            <p>2.2. Оплата 100% в течение 3 банковских дней с момента подписания Акта.</p>
+            <div class="section-title">5. РЕКВИЗИТЫ И ПОДПИСИ СТОРОН</div>
+            <table style="width: 100%; border: none; margin-top: 20px; text-indent: 0;">
+                <tr>
+                    <td style="border: none; width: 50%; vertical-align: top; padding-right: 10px;">
+                        <strong>Исполнитель:</strong><br>{company}<br>ИНН: {inn}{kpp_str}<br>Адрес: {address}<br><br>{director_pos_nom}<br><br>_______________ / {director} /<br>М.П.
+                    </td>
+                    <td style="border: none; width: 50%; vertical-align: top; padding-left: 10px;">
+                        <strong>Заказчик:</strong><br>{customer_name}<br>ИНН: {customer_inn}{cust_kpp_str}<br>Адрес: {customer_address}<br><br>{customer_pos_nom}<br><br>_______________ / {customer_director} /<br>М.П.
+                    </td>
+                </tr>
+            </table>
+            </body></html>"""
+            pisa.CreatePDF(html, dest=buffer)
+
+        # --- АКТ ---
+        elif template == "act":
+            rows = "".join([f"<tr><td style='text-align:center;'>{i+1}</td><td>{s['name']}</td><td style='text-align:center;'>{s.get('unit', 'усл.')}</td><td style='text-align:center;'>{s['qty']}</td><td style='text-align:right;'>{format_money(float(s['price']))}</td><td style='text-align:right;'>{format_money(float(s['price'])*int(s['qty']))}</td></tr>" for i, s in enumerate(services)])
+            kpp_str = f", КПП: {kpp}" if kpp else ""
+            cust_kpp_str = f", КПП: {customer_kpp}" if customer_kpp else ""
+            html = f"""<html><head><meta charset="utf-8"><style>{CSS_STYLES}</style></head><body>
+            <h1 class="title">АКТ СДАЧИ-ПРИЕМКИ ОКАЗАННЫХ УСЛУГ № {smeta_appendix}</h1>
+            <table class="meta"><tr><td style="text-align: left;">г. Москва</td><td style="text-align: right;">{smeta_date_to_use} г.</td></tr></table>
+            <p>Мы, нижеподписавшиеся, представитель Исполнителя <strong>{company}</strong> в лице {director_pos} {director}, с одной стороны, и представитель Заказчика <strong>{customer_name}</strong> в лице {customer_pos} {customer_director}, с другой стороны, составили настоящий Акт о том, что Услуги по Договору № {dogovor_number} от {date_to_use} выполнены в полном объеме и в срок.</p>
+            <table><tr><th style="text-align:center; width: 5%;">№</th><th style="width: 40%;">Наименование услуги</th><th style="text-align:center; width: 10%;">Ед.</th><th style="text-align:center; width: 10%;">Кол-во</th><th style="text-align:right; width: 15%;">Цена</th><th style="text-align:right; width: 15%;">Сумма</th></tr>{rows}<tr><td colspan="5" style="text-align:right;font-weight:bold;">Всего к оплате:</td><td style="text-align:right;font-weight:bold;">{format_money(total_price)}</td></tr></table>
+            <p><strong>Всего наименований {len(services)}, на сумму {format_money(total_price)} руб.</strong> {nds_text}.</p>
+            <p>Претензий по объему, качеству и срокам оказания Услуг Заказчик не имеет.</p>
+            <table style="width: 100%; border: none; margin-top: 40px; text-indent: 0;">
+                <tr>
+                    <td style="border: none; width: 50%; vertical-align: top; padding-right: 10px;"><strong>Исполнитель:</strong><br>{company}<br>ИНН: {inn}{kpp_str}<br>Адрес: {address}<br><br>{director_pos_nom}<br><br>_______________ / {director} /<br>М.П.</td>
+                    <td style="border: none; width: 50%; vertical-align: top; padding-left: 10px;"><strong>Заказчик:</strong><br>{customer_name}<br>ИНН: {customer_inn}{cust_kpp_str}<br>Адрес: {customer_address}<br><br>{customer_pos_nom}<br><br>_______________ / {customer_director} /<br>М.П.</td>
+                </tr>
+            </table>
+            </body></html>"""
+            pisa.CreatePDF(html, dest=buffer)
+
+        # --- СЧЕТ ---
+        elif template == "invoice":
+            rows = "".join([f"<tr><td style='text-align:center;'>{i+1}</td><td>{s['name']}</td><td style='text-align:center;'>{s.get('unit', 'усл.')}</td><td style='text-align:center;'>{s['qty']}</td><td style='text-align:right;'>{format_money(float(s['price']))}</td><td style='text-align:right;'>{format_money(float(s['price'])*int(s['qty']))}</td></tr>" for i, s in enumerate(services)])
+            kpp_str = f", КПП: {kpp}" if kpp else ""
+            cust_kpp_str = f", КПП: {customer_kpp}" if customer_kpp else ""
+            
+            bank_table = f"""
+            <table style="width: 100%; text-indent: 0; font-size: 10pt; margin-bottom: 20px;">
+                <tr><td style="border: 1px solid #000; padding: 5px; width: 15%;">Банк получателя:</td><td style="border: 1px solid #000; padding: 5px;" colspan="3">{bank_name or "____________________"}</td></tr>
+                <tr><td style="border: 1px solid #000; padding: 5px;">БИК:</td><td style="border: 1px solid #000; padding: 5px; width: 35%;">{bik or "__________"}</td><td style="border: 1px solid #000; padding: 5px; width: 15%;">Сч. №:</td><td style="border: 1px solid #000; padding: 5px;">{ks or "____________________"}</td></tr>
+                <tr><td style="border: 1px solid #000; padding: 5px;">Получатель:</td><td style="border: 1px solid #000; padding: 5px;" colspan="3">{company}<br>ИНН {inn}{kpp_str}</td></tr>
+                <tr><td style="border: 1px solid #000; padding: 5px;">Р/с:</td><td style="border: 1px solid #000; padding: 5px;" colspan="3">{rs or "____________________"}</td></tr>
+            </table>
+            """
+            html = f"""<html><head><meta charset="utf-8"><style>{CSS_STYLES}</style></head><body>
+            {header_html}
+            {bank_table}
+            <h1 class="title">Счет на оплату № {dogovor_number} от {smeta_date_to_use} г.</h1>
+            <table class="meta" style="margin-bottom: 15px;">
+                <tr><td style="text-align: left;"><strong>Поставщик (Исполнитель):</strong><br>{company}, ИНН {inn}{kpp_str}, {address}</td></tr>
+                <tr><td style="text-align: left; padding-top: 5px;"><strong>Покупатель (Заказчик):</strong><br>{customer_name}, ИНН {customer_inn}{cust_kpp_str}, {customer_address}</td></tr>
+                <tr><td style="text-align: left; padding-top: 5px;"><strong>Основание:</strong> Договор № {dogovor_number} от {date_to_use} г.</td></tr>
+            </table>
+            <table>
+                <tr><th style="text-align:center; width: 5%;">№</th><th style="width: 45%;">Наименование</th><th style="text-align:center; width: 10%;">Ед.</th><th style="text-align:center; width: 10%;">Кол-во</th><th style="text-align:right; width: 15%;">Цена</th><th style="text-align:right; width: 15%;">Сумма</th></tr>
+                {rows}
+                <tr><td colspan="5" style="text-align:right;font-weight:bold;">Итого:</td><td style="text-align:right;font-weight:bold;">{format_money(total_price)}</td></tr>
+                <tr><td colspan="5" style="text-align:right;font-weight:bold;">Всего к оплате:</td><td style="text-align:right;font-weight:bold;">{format_money(total_price)}</td></tr>
+            </table>
+            <table style="width: 100%; border: none; margin-top: 40px; text-indent: 0;">
+                <tr>
+                    <td style="border: none; width: 50%; vertical-align: top; padding-right: 10px;"><strong>Руководитель:</strong><br><br><br>_______________ / {director} /<br><br>М.П.</td>
+                    <td style="border: none; width: 50%; vertical-align: top; padding-left: 10px;"><strong>Главный бухгалтер:</strong><br><br><br>_______________ / {director} /</td>
+                </tr>
+            </table>
+            </body></html>"""
+            pisa.CreatePDF(html, dest=buffer)
+
+        buffer.seek(0)
 
         if chat_id:
-            file_name = f"{template}_{current_date.replace('.', '_')}.pdf"
             url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendDocument"
-            files = {'document': (file_name, pdf_buffer, 'application/pdf')}
-            data = {'chat_id': chat_id, 'caption': f'Ваш документ ({template.upper()}) готов! 📄'}
-            requests.post(url, files=files, data=data)
-            return {"status": "ok", "message": "Отправлено в Telegram"}
-
-        return StreamingResponse(pdf_buffer, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=document.pdf"})
+            files = {'document': ('document.pdf', buffer.getvalue(), 'application/pdf')}
+            data = {'chat_id': chat_id, 'caption': 'Ваш документ готов!'}
+            try:
+                response = requests.post(url, files=files, data=data)
+                if response.status_code == 200:
+                    return {"status": "ok", "message": "Отправлено в ТГ"}
+                else:
+                    return JSONResponse(status_code=500, content={"status": "error", "message": f"Ошибка ТГ: {response.text}"})
+            except Exception as e:
+                return JSONResponse(status_code=500, content={"status": "error", "message": f"Ошибка ТГ: {str(e)}"})
+        else:
+            return {"status": "error", "message": "Нет chat_id"}
 
     except Exception as e:
-        print(f"Error: {e}")
         return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
