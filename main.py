@@ -12,7 +12,6 @@ from xhtml2pdf import pisa
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-# --- ТОКЕН НОВОГО БОТА ---
 BOT_TOKEN = "9065574882:AAEiC0Ls-YC1ADejERPNLcZSdEJS7qCZe_I" 
 
 DATABASE_URL = "sqlite:///./profiles_final.db"
@@ -67,7 +66,6 @@ def get_header_html(company, inn, kpp, address, contacts, logo_base64=None):
     </div>
     """
 
-# --- ИНТЕРФЕЙС (HTML) ---
 @app.get("/")
 def read_root(): 
     html = """
@@ -76,7 +74,7 @@ def read_root():
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-        <title>GenDoc</title>
+        <title>GenDoc | Документы</title>
         <script src="https://telegram.org/js/telegram-web-app.js"></script>
         <style>
             body { background: #1a1a1a; color: #fff; font-family: sans-serif; padding: 16px; margin: 0; }
@@ -167,7 +165,6 @@ def read_root():
     """
     return HTMLResponse(content=html)
 
-# --- ГЕНЕРАЦИЯ ДОКУМЕНТОВ (Твой код) ---
 @app.post("/generate-doc")
 async def generate_doc(
     template: str = Form("kp"), company: str = Form("ООО Ваша компания"), inn: str = Form("0000000000"), kpp: str = Form(""), 
@@ -194,7 +191,6 @@ async def generate_doc(
             
         header_html = get_header_html(company, inn, kpp, address, contacts, logo)
 
-        # --- КП ---
         if template == "kp":
             rows = "".join([f"<tr><td style='text-align:center;'>{i+1}</td><td>{s['name']}</td><td style='text-align:center;'>{term}</td><td style='text-align:right;'>{format_money(float(s['price'])*int(s['qty']))} руб.</td></tr>" for i, s in enumerate(services)])
             html = f"""<html><head><meta charset="utf-8"><style>{CSS_STYLES}</style></head><body>
@@ -208,7 +204,6 @@ async def generate_doc(
             </body></html>"""
             pisa.CreatePDF(html, dest=buffer)
 
-        # --- СМЕТА ---
         elif template == "smeta":
             rows = "".join([f"<tr><td style='text-align:center;'>{i+1}</td><td>{s['name']}</td><td style='text-align:center;'>{s.get('unit', 'усл.')}</td><td style='text-align:center;'>{s['qty']}</td><td style='text-align:right;'>{format_money(float(s['price']))}</td><td style='text-align:right;'>{format_money(float(s['price'])*int(s['qty']))}</td></tr>" for i, s in enumerate(services)])
             html = f"""<html><head><meta charset="utf-8"><style>{CSS_STYLES}</style></head><body>
@@ -220,7 +215,6 @@ async def generate_doc(
             </body></html>"""
             pisa.CreatePDF(html, dest=buffer)
 
-        # --- ДОГОВОР ---
         elif template == "dogovor":
             first_service = services[0]['name'] if services else "Услуги"
             kpp_str = f", КПП: {kpp}" if kpp else ""
@@ -249,7 +243,6 @@ async def generate_doc(
             </body></html>"""
             pisa.CreatePDF(html, dest=buffer)
 
-        # --- АКТ ---
         elif template == "act":
             rows = "".join([f"<tr><td style='text-align:center;'>{i+1}</td><td>{s['name']}</td><td style='text-align:center;'>{s.get('unit', 'усл.')}</td><td style='text-align:center;'>{s['qty']}</td><td style='text-align:right;'>{format_money(float(s['price']))}</td><td style='text-align:right;'>{format_money(float(s['price'])*int(s['qty']))}</td></tr>" for i, s in enumerate(services)])
             kpp_str = f", КПП: {kpp}" if kpp else ""
@@ -270,7 +263,6 @@ async def generate_doc(
             </body></html>"""
             pisa.CreatePDF(html, dest=buffer)
 
-        # --- СЧЕТ ---
         elif template == "invoice":
             rows = "".join([f"<tr><td style='text-align:center;'>{i+1}</td><td>{s['name']}</td><td style='text-align:center;'>{s.get('unit', 'усл.')}</td><td style='text-align:center;'>{s['qty']}</td><td style='text-align:right;'>{format_money(float(s['price']))}</td><td style='text-align:right;'>{format_money(float(s['price'])*int(s['qty']))}</td></tr>" for i, s in enumerate(services)])
             kpp_str = f", КПП: {kpp}" if kpp else ""
