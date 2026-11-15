@@ -1,9 +1,9 @@
 from fastapi import FastAPI, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
-import io, json, requests
+import io, json, requests, os
 from datetime import datetime
-from sqlalchemy import create_engine, Column, String, Integer, Text
+from sqlalchemy import create_engine, Column, String, Integer
 from sqlalchemy.orm import declarative_base, sessionmaker
 from xhtml2pdf import pisa
 
@@ -21,20 +21,10 @@ class Profile(Base):
     __tablename__ = "profiles"
     id = Column(Integer, primary_key=True, index=True)
     chat_id = Column(String, unique=True, index=True)
-    company = Column(String, default="ООО Ваша компания")
-    inn = Column(String, default="0000000000")
-    kpp = Column(String, default="")
-    address = Column(String, default="г. Москва")
-    contacts = Column(String, default="+7 (999) 999-99-99")
-    tax_mode = Column(String, default="usn")
-    director = Column(String, default="Иванов И.И.")
-    director_pos = Column(String, default="Генерального директора")
-    director_pos_nom = Column(String, default="Генеральный директор")
-    bank_name = Column(String, default="")
-    bik = Column(String, default="")
-    rs = Column(String, default="")
-    ks = Column(String, default="")
-    logo = Column(String, nullable=True)
+    company = Column(String, default="")
+    inn = Column(String, default="")
+    address = Column(String, default="")
+    contacts = Column(String, default="")
 
 Base.metadata.create_all(bind=engine)
 
@@ -44,28 +34,20 @@ body { font-family: "Helvetica", sans-serif; font-size: 11pt; line-height: 1.35;
 h1.title { text-align: center; font-size: 14pt; font-weight: bold; margin-bottom: 20px; text-transform: uppercase; }
 .meta { width: 100%; margin-bottom: 20px; }
 .meta td { border: none; padding: 0; }
-.section-title { font-weight: bold; margin-top: 15px; margin-bottom: 10px; }
 table { width: 100%; margin-top: 15px; }
 th, td { border: 1px solid #000; padding: 6px; text-align: left; }
 .header-info { margin-bottom: 20px; font-size: 10pt; text-align: left; }
-.signature-block { margin-top: 30px; }
 """
 
 def format_money(val):
     return f"{val:,.2f}".replace(',', ' ').replace('.', ',')
 
-def get_header_html(company, inn, kpp, address, contacts):
-    kpp_str = f"/{kpp}" if kpp else ""
-    return f"""
-    <div class="header-info">
-        <strong>{company}</strong><br>ИНН/КПП: {inn}{kpp_str}<br>Адрес: {address}<br>Тел: {contacts}
-    </div>
-    """
+def get_header_html(company, inn, address, contacts):
+    return f"<div class='header-info'><strong>{company}</strong><br>ИНН: {inn}<br>Адрес: {address}<br>Тел: {contacts}</div>"
 
-# --- ИНТЕРФЕЙС (Твой HTML) ---
 @app.get("/")
 def read_root(): 
-    html = """
+    html_content = """
     <!DOCTYPE html>
     <html lang="ru">
     <head>
@@ -104,10 +86,9 @@ def read_root():
     </head>
     <body>
         <div class="header"><div class="logo">Gen<span>Doc</span></div></div>
-
         <div id="profileSection" class="step-card">
             <div class="step-header"><div class="step-number">1</div>Профиль компании</div>
-            <input type="text" id="companyInput" class="input-text" placeholder="Название компании (в кавычках)" value='ООО "Тест"'>
+            <input type="text" id="companyInput" class="input-text" placeholder="Название компании" value='ООО "Тест"'>
             <div style="display: flex; gap: 10px;">
                 <input type="text" id="innInput" class="input-text" placeholder="ИНН" value="1234567890">
                 <button class="btn-secondary" style="width: auto; white-space: nowrap; margin-bottom: 10px;" onclick="fetchCompanyData()">Найти по ИНН</button>
@@ -116,7 +97,6 @@ def read_root():
             <input type="text" id="contactInput" class="input-text" placeholder="Контакты" value="+7 999 999-99-99">
             <button class="btn-generate" id="btnSaveProfile" style="background: #444;">Сохранить профиль</button>
         </div>
-
         <div id="generateSection" class="step-card">
             <div class="step-header"><div class="step-number">2</div>Данные документа</div>
             <div class="templates">
@@ -126,10 +106,9 @@ def read_root():
                 <button class="tpl-btn" onclick="setTemplate('act', this)">Акт</button>
                 <button class="tpl-btn" onclick="setTemplate('invoice', this)">Счет</button>
             </div>
-
             <div id="servicesContainer">
                 <div class="service-row">
-                    <input type="text" class="input-text input-name" placeholder="Услуга" value='Транспортировка груза'>
+                    <input type="text" class="input-text input-name" placeholder="Услуга" value='Транспортировка'>
                     <input type="text" class="input-text input-unit" placeholder="Ед." value="рейс">
                     <input type="text" class="input-text input-qty" placeholder="Кол-во" value="1">
                     <input type="text" class="input-text input-price" placeholder="Цена" value="10000">
@@ -138,30 +117,25 @@ def read_root():
             </div>
             <button class="btn-secondary" onclick="addService()" style="margin-top: 5px;">+ Добавить услугу</button>
             <input type="text" id="termInput" class="input-text" placeholder="Сроки" value="1 рейс" style="margin-top: 10px;">
-
             <div id="dogovorFields" class="dynamic-fields">
                 <input type="text" id="dogovorNumber" class="input-text" placeholder="Номер договора" value="б/н">
                 <input type="text" id="dogovorDate" class="input-text" placeholder="Дата договора" value="12.11.2026">
                 <input type="text" id="customerName" class="input-text" placeholder="Наименование Заказчика" value='ООО "Заказчик"'>
                 <input type="text" id="customerInn" class="input-text" placeholder="ИНН Заказчика" value="0987654321">
             </div>
-
             <div id="smetaFields" class="dynamic-fields">
                 <input type="text" id="smetaNumber" class="input-text" placeholder="Номер договора" value="б/н">
                 <input type="text" id="smetaDate" class="input-text" placeholder="Дата документа" value="12.11.2026">
             </div>
-
             <button class="btn-generate" id="btnGenerateDoc" style="margin-top: 15px;">Создать документ 📄</button>
-            <div class="disclaimer">⚠️ <b>Внимание!</b> Бот использует шаблоны и может допускать ошибки. Обязательно проверяйте итоговый файл.</div>
+            <div class="disclaimer">⚠️ <b>Внимание!</b> Обязательно проверяйте итоговый файл.</div>
             <div class="status-text" id="statusText"></div>
         </div>
-
         <script>
-            const tg = window.Telegram.WebApp; tg.expand(); tg.setHeaderColor('#121212');
+            const tg = window.Telegram.WebApp; tg.expand();
             const chatId = tg.initDataUnsafe?.user?.id;
             const statusText = document.getElementById('statusText');
             let currentTemplate = 'kp';
-
             function addService() {
                 const container = document.getElementById('servicesContainer');
                 const row = document.createElement('div');
@@ -170,22 +144,6 @@ def read_root():
                 container.appendChild(row);
             }
             function removeService(btn) { if (document.querySelectorAll('.service-row').length > 1) btn.parentElement.remove(); }
-
-            async function loadProfile() {
-                if (!chatId) return;
-                try {
-                    const res = await fetch(`/get-profile?chat_id=${chatId}`);
-                    const data = await res.json();
-                    if (data.status === "ok") {
-                        document.getElementById('companyInput').value = data.company;
-                        document.getElementById('innInput').value = data.inn;
-                        document.getElementById('addressInput').value = data.address;
-                        document.getElementById('contactInput').value = data.contacts;
-                    }
-                } catch (e) {}
-            }
-            loadProfile();
-
             async function fetchCompanyData() {
                 const inn = document.getElementById('innInput').value;
                 if (inn.length < 10) { alert("Введите корректный ИНН"); return; }
@@ -203,7 +161,6 @@ def read_root():
                     } else { alert("Компания не найдена"); }
                 } catch (e) { alert("Ошибка при поиске ИНН."); } finally { btn.textContent = "Найти по ИНН"; }
             }
-
             function setTemplate(tpl, btn) {
                 currentTemplate = tpl;
                 document.querySelectorAll('.tpl-btn').forEach(b => b.classList.remove('active'));
@@ -212,7 +169,6 @@ def read_root():
                 if (tpl === 'dogovor') document.getElementById('dogovorFields').classList.add('active');
                 if (tpl === 'smeta' || tpl === 'act' || tpl === 'invoice') document.getElementById('smetaFields').classList.add('active');
             }
-
             document.getElementById('btnSaveProfile').addEventListener('click', async () => {
                 const btn = document.getElementById('btnSaveProfile'); btn.textContent = "Сохранение...";
                 const fd = new FormData();
@@ -221,13 +177,11 @@ def read_root():
                 fd.append('address', document.getElementById('addressInput').value); fd.append('contacts', document.getElementById('contactInput').value);
                 try {
                     const res = await fetch('/save-profile', { method: 'POST', body: fd });
-                    if (res.ok) { btn.textContent = "Сохранено!"; setTimeout(() => btn.textContent = "Сохранить профиль", 2000); } else { btn.textContent = "Ошибка сервера"; }
+                    if (res.ok) { btn.textContent = "Сохранено!"; setTimeout(() => btn.textContent = "Сохранить профиль", 2000); } else { btn.textContent = "Ошибка"; }
                 } catch (e) { btn.textContent = "Ошибка сети"; }
             });
-
             document.getElementById('btnGenerateDoc').addEventListener('click', async () => {
                 const btn = document.getElementById('btnGenerateDoc'); btn.disabled = true; btn.textContent = "Отправка..."; statusText.textContent = "Генерация...";
-                
                 const services = [];
                 document.querySelectorAll('.service-row').forEach(row => {
                     const name = row.querySelector('.input-name').value;
@@ -236,14 +190,12 @@ def read_root():
                     const price = row.querySelector('.input-price').value;
                     if (name && price) services.push({ name, unit, qty, price });
                 });
-                if (services.length === 0) { tg.showAlert("Добавьте хотя бы одну услугу!"); btn.disabled = false; btn.textContent = "Создать документ 📄"; return; }
-
+                if (services.length === 0) { tg.showAlert("Добавьте услугу!"); btn.disabled = false; btn.textContent = "Создать документ 📄"; return; }
                 const fd = new FormData();
                 fd.append('chat_id', chatId); fd.append('template', currentTemplate);
                 fd.append('company', document.getElementById('companyInput').value); fd.append('inn', document.getElementById('innInput').value);
                 fd.append('address', document.getElementById('addressInput').value); fd.append('contacts', document.getElementById('contactInput').value);
                 fd.append('term', document.getElementById('termInput').value); fd.append('services_json', JSON.stringify(services));
-
                 if (currentTemplate === 'dogovor') {
                     fd.append('dogovor_number', document.getElementById('dogovorNumber').value); fd.append('dogovor_date', document.getElementById('dogovorDate').value);
                     fd.append('customer_name', document.getElementById('customerName').value); fd.append('customer_inn', document.getElementById('customerInn').value);
@@ -251,19 +203,17 @@ def read_root():
                 if (currentTemplate === 'smeta' || currentTemplate === 'act' || currentTemplate === 'invoice') {
                     fd.append('dogovor_number', document.getElementById('smetaNumber').value); fd.append('smeta_date', document.getElementById('smetaDate').value);
                 }
-
                 try {
                     const res = await fetch('/generate-doc', { method: 'POST', body: fd });
-                    if (res.ok) { tg.showAlert("Документ отправлен в чат!"); statusText.textContent = "Готово!"; } else { statusText.textContent = "Ошибка сервера."; }
+                    if (res.ok) { tg.showAlert("Документ отправлен!"); statusText.textContent = "Готово!"; } else { statusText.textContent = "Ошибка сервера."; }
                 } catch (e) { statusText.textContent = "Ошибка сети."; } finally { btn.disabled = false; btn.textContent = "Создать документ 📄"; }
             });
         </script>
     </body>
     </html>
     """
-    return HTMLResponse(content=html)
+    return HTMLResponse(content=html_content)
 
-# --- СЕРВЕРНЫЕ ФУНКЦИИ (Профиль и Генерация) ---
 @app.get("/get-profile")
 async def get_profile(chat_id: str):
     db = SessionLocal()
@@ -274,7 +224,9 @@ async def get_profile(chat_id: str):
     return {"status": "not_found"}
 
 @app.post("/save-profile")
-async def save_profile(chat_id: str = Form(...), company: str = Form(...), inn: str = Form(...), address: str = Form(...), contacts: str = Form(...)):
+async def save_profile(
+    chat_id: str = Form(...), company: str = Form(""), inn: str = Form(""), address: str = Form(""), contacts: str = Form("")
+):
     db = SessionLocal()
     try:
         profile = db.query(Profile).filter(Profile.chat_id == chat_id).first()
@@ -284,12 +236,41 @@ async def save_profile(chat_id: str = Form(...), company: str = Form(...), inn: 
             db.add(Profile(chat_id=chat_id, company=company, inn=inn, address=address, contacts=contacts))
         db.commit()
         return {"status": "ok"}
-    except Exception as e: return {"status": "error", "message": str(e)}
+    except Exception as e: return JSONResponse(status_code=500, content={"status": "error"})
     finally: db.close()
 
 @app.post("/generate-doc")
 async def generate_doc(
-    template: str = Form("kp"), company: str = Form("ООО Ваша компания"), inn: str = Form("0000000000"), kpp: str = Form(""), 
-    address: str = Form("г. Москва"), contacts: str = Form("+7 (999) 999-99-99"), tax_mode: str = Form("usn"),
-    director: str = Form("Иванов И.И."), director_pos: str = Form("Генерального директора"), director_pos_nom: str = Form("Генеральный директор"),
-    services_json: str = Form("[]"), term: str = Form
+    template: str = Form("kp"), company: str = Form(""), inn: str = Form(""), address: str = Form(""), contacts: str = Form(""),
+    services_json: str = Form("[]"), term: str = Form(""), dogovor_number: str = Form(""), dogovor_date: str = Form(""), 
+    customer_name: str = Form(""), customer_inn: str = Form(""), smeta_date: str = Form(""), chat_id: str = Form(None)
+):
+    try:
+        services = json.loads(services_json)
+        total_price = sum(float(s['price']) * int(s['qty']) for s in services)
+        current_date = datetime.now().strftime("%d.%m.%Y")
+        date_to_use = dogovor_date if dogovor_date else current_date
+        smeta_date_to_use = smeta_date if smeta_date else current_date
+        buffer = io.BytesIO()
+        header_html = get_header_html(company, inn, address, contacts)
+
+        if template == "kp":
+            rows = "".join([f"<tr><td>{i+1}</td><td>{s['name']}</td><td>{term}</td><td>{format_money(float(s['price'])*int(s['qty']))} руб.</td></tr>" for i, s in enumerate(services)])
+            html = f"<html><body>{header_html}<h1>КП №{dogovor_number}</h1><table border='1'><tr><th>№</th><th>Услуга</th><th>Срок</th><th>Сумма</th></tr>{rows}</table><h2>Итого: {format_money(total_price)} руб.</h2></body></html>"
+            pisa.CreatePDF(html, dest=buffer)
+        elif template == "smeta":
+            rows = "".join([f"<tr><td>{i+1}</td><td>{s['name']}</td><td>{s.get('unit','усл')}</td><td>{s['qty']}</td><td>{format_money(float(s['price']))}</td><td>{format_money(float(s['price'])*int(s['qty']))}</td></tr>" for i, s in enumerate(services)])
+            html = f"<html><body><h1>Смета к Договору №{dogovor_number}</h1><table border='1'><tr><th>№</th><th>Наименование</th><th>Ед</th><th>Кол-во</th><th>Цена</th><th>Сумма</th></tr>{rows}</table></body></html>"
+            pisa.CreatePDF(html, dest=buffer)
+        else:
+            html = f"<html><body><h1>{template.upper()}</h1><p>Сумма: {format_money(total_price)} руб.</p></body></html>"
+            pisa.CreatePDF(html, dest=buffer)
+
+        buffer.seek(0)
+        if chat_id:
+            url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendDocument"
+            files = {'document': (f'{template}.pdf', buffer.getvalue(), 'application/pdf')}
+            data = {'chat_id': chat_id, 'caption': 'Ваш документ готов! 📄'}
+            requests.post(url, files=files, data=data)
+        return {"status": "ok"}
+    except Exception as e: return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
