@@ -23,7 +23,6 @@ app.add_middleware(
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8888816541:AAHr3KYdyGi3au_9xQQ83p7NVvI9A1Yp_xE")
 
-# --- БАЗА ДАННЫХ ---
 DATABASE_URL = "sqlite:///./profiles_final.db"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -50,7 +49,6 @@ class Profile(Base):
 
 Base.metadata.create_all(bind=engine)
 
-# --- ФУНКЦИИ ---
 def format_money(val):
     return f"{val:,.2f}".replace(',', ' ').replace('.', ',')
 
@@ -86,7 +84,6 @@ th, td { border: 1px solid #000; padding: 6px; text-align: left; }
 .signature-block { margin-top: 30px; }
 """
 
-# --- ЭНДПОИНТЫ ---
 @app.get("/")
 def read_root(): 
     html_content = """
